@@ -1,6 +1,3 @@
-
-import time
-import datetime
 from datetime import datetime
 import telebot
 from telebot import types
@@ -9,10 +6,11 @@ import os
 import traceback
 
 import config
-import db
+import database as db
 import rr
 import cl
 import gdrive
+from admin import generate_key
 
 # accbot112211@gmail.com
 # qwerty12Aa
@@ -31,20 +29,18 @@ if path_bot[-1] != "/":
 def send_welcome(message):
     try:
         now = datetime.now().strftime("%H:%M:%S")
-        # print(now2 + " - " + message.from_user.username + " - start")
-
         print(now + " - " + message.from_user.username + " - " + str(message.from_user.id) + " - start")
 
         user_name = message.from_user.username
         user_id = str(message.from_user.id)
         if message.chat.id > 0:
-
             user = db.get_user(user_id, user_name)
             print(user)
-            
-            markup = menu.markup(menu.start2)
-            bot.send_message(message.chat.id, answ.start1[0], reply_markup=markup)
-            bot.send_message(message.chat.id, answ.start1[1], reply_markup=markup)
+
+            bot.send_message(message.from_user.id, answ.start_for_lead[0] + answ.pavel_consultant_link)
+            # markup = menu.markup(menu.start2)
+            # bot.send_message(message.chat.id, answ.start1[0], reply_markup=markup)
+            # bot.send_message(message.chat.id, answ.start1[1], reply_markup=markup)
     except:
         err = traceback.format_exc().replace('"', '')
         err = err.replace("'", "")
@@ -68,17 +64,53 @@ def work_acc(message: types.Message):
         org = db.get_org(user_id)
         st = 0
 
-        if message.chat.id > 0 and user[0][7] != "assistant":
+        if user[0][7] == "lead":
+            users_token = db.check_token(user_id)
+            if users_token != 0:
+                if message.text == users_token:
+                    db.upd_org(user_id, "users", "status", "user")
+                    markup = menu.markup(menu.start2)
+                    bot.send_message(message.chat.id, answ.start1[0], reply_markup=markup)
+                    bot.send_message(message.chat.id, answ.start1[1], reply_markup=markup)
+                    return
+                else:
+                    bot.send_message(message.from_user.id, answ.start_for_lead[3])
+                    return
+            else:
+                bot.send_message(message.from_user.id, answ.start_for_lead[1] + answ.pavel_consultant_link +
+                                 answ.start_for_lead[2])
+                return
+
+        if user[0][7] == "admin":
+            if message.text == "Пользователь зарегистрирован":
+                markup = menu.markup(menu.admin_kb_1)
+                bot.send_message(message.from_user.id, answ.admin_msg[1], reply_markup=markup)
+            elif message.text.isdigit():
+                markup = menu.markup(menu.admin_kb_1)
+                token = generate_key()
+                resp = db.update_user_token(message.text, token)
+                bot.send_message(message.from_user.id, answ.admin_msg[2] + message.text + resp + token,
+                                 reply_markup=markup)
+            else:
+                markup = menu.markup(menu.admin_kb_2)
+                bot.send_message(message.from_user.id, answ.admin_msg[0], reply_markup=markup)
+
+        elif message.chat.id > 0 and user[0][7] != "assistant":
 
             if message.text == config.assistants_password:
                 db.upd_org(user_id, "users", "status", "assistant")
+                # db.del_org(user_id) - нужно ли чистить организации?
+                markup = menu.markup(menu.mainmenu)
+                bot.send_message(message.from_user.id, answ.assistant_msg[0], reply_markup=markup)
+                bot.send_message(message.chat.id, answ.help_a, reply_markup=markup)
+                return
 
             elif message.text == "К обзору!":
                 if user[0][8] == 0:
                     db.upd_progress(user_id, "users", "9999")
                 else:
                     db.upd_progress(user_id, "users", "9998")
-                user = db.get_user(user_id, user_name)
+                # user = db.get_user(user_id, user_name)
                 markup = menu.markup([menu.start1[0]])
                 bot.send_message(message.chat.id, answ.start2[0], reply_markup=markup)
             elif message.text == "Понятно, далее":
@@ -118,7 +150,7 @@ def work_acc(message: types.Message):
 
             if int(chat_id) < 0:
                 None
-            
+
             elif user[0][8] == 0 and st == 0:
                 if message.text == menu.cancel[0]:
                     markup = menu.markup(menu.start2)
@@ -136,23 +168,24 @@ def work_acc(message: types.Message):
                         markup = menu.markup(menu.start2)
                         # db.upd_progress(user_id, "users", "0")
                         db.upd_progress(user_id, "organizations", "0")
-                        
+
                         bot.send_message(message.chat.id, "Отменено", reply_markup=markup)
                         bot.send_message(message.chat.id, answ.start3[1], reply_markup=markup)
                         bot.send_message(message.chat.id, answ.form1[org[0][19]], reply_markup=markup)
                     else:
-                        db.upd_org(user_id, "organizations", answ.form1db[org[0][19]], str(message.text))
-                        db.upd_progress(user_id, "organizations", str(org[0][19]+1))
+                        if message.text != config.assistants_password:
+                            db.upd_org(user_id, "organizations", answ.form1db[org[0][19]], str(message.text))
+                            db.upd_progress(user_id, "organizations", str(org[0][19] + 1))
 
-                        markup = menu.markup(menu.cancel)
-                        bot.send_message(message.chat.id, answ.form1[org[0][19]+1], reply_markup=markup)
+                            markup = menu.markup(menu.cancel)
+                            bot.send_message(message.chat.id, answ.form1[org[0][19] + 1], reply_markup=markup)
 
                 elif org[0][19] == 13:
                     markup = menu.markup(menu.start3)
                     bot.send_message(message.chat.id, answ.start4[0], reply_markup=markup)
                     bot.send_message(message.chat.id, answ.start4[1], reply_markup=markup)
                     db.upd_org(user_id, "organizations", answ.form1db[org[0][19]], str(message.text))
-                    db.upd_progress(user_id, "organizations", str(org[0][19]+1))
+                    db.upd_progress(user_id, "organizations", str(org[0][19] + 1))
                     path_dr = gdrive.create_orgs_folder(org[0][5], config.folder_id)
                     db.upd_org(user_id, "organizations", "folder_id", str(path_dr))
 
@@ -177,7 +210,6 @@ def work_acc(message: types.Message):
                     path_dr8 = gdrive.create_orgs_folder("other", path_dr)
                     db.upd_org(user_id, "organizations", "folder_id8", str(path_dr8))
 
-                        
                 elif message.text == "Я буду загружать сам":
                     markup = menu.markup(menu.start4)
                     bot.send_message(message.chat.id, answ.start6, reply_markup=markup)
@@ -187,13 +219,13 @@ def work_acc(message: types.Message):
                     markup = menu.markup(menu.mainmenu)
                     bot.send_message(message.chat.id, answ.start5end, reply_markup=markup)
                     db.upd_progress(user_id, "users", "1")
-        
+
                 elif message.text == "Я передумал, хочу автоматизировать процесс" or message.text == "Я хочу автоматизировать процесс":
                     markup = menu.markup(menu.mainmenu)
                     bot.send_message(message.chat.id, answ.start7, reply_markup=markup)
                     bot.send_message(message.chat.id, answ.start5end, reply_markup=markup)
                     db.upd_progress(user_id, "users", "1")
-                    
+
                     markup = menu.inline(user_id)
                     answer = "Клиент https://t.me/" + user_name + " хочет оформить доверенность\nact=1"
                     bot.send_message(config.assists_chat, answer, reply_markup=markup)
@@ -202,53 +234,53 @@ def work_acc(message: types.Message):
 
                 # print(os.path.abspath(__file__)[:-7])
 
-
             elif message.text == "К работе!":
                 markup = menu.markup(menu.mainmenu)
                 bot.send_message(message.chat.id, answ.start2[7], reply_markup=markup)
 
             elif user[0][8] == 91:
                 markup = menu.inline(user_id)
-                answer = "https://t.me/" + user_name + "\nКлиент " + org[0][5] + " спрашивает:\n" + message.text + "\nact=2"
+                answer = "https://t.me/" + user_name + "\nКлиент " + org[0][
+                    5] + " спрашивает:\n" + message.text + "\nact=2"
                 bot.send_message(config.assists_chat, answer, reply_markup=markup)
                 markup = menu.markup(menu.mainmenu)
                 bot.send_message(message.chat.id, "Через некоторое время специалист даст ответ", reply_markup=markup)
                 db.upd_progress(user_id, "users", "1")
 
-
             elif user[0][8] == 102:
                 markup = menu.inline(user_id)
-                answer = "https://t.me/" + user_name + "\nКлиент " + org[0][5] + " спрашивает:\n" + message.text + "\nact=2"
+                answer = "https://t.me/" + user_name + "\nКлиент " + org[0][
+                    5] + " спрашивает:\n" + message.text + "\nact=2"
                 bot.send_message(config.assists_chat_fsi, answer, reply_markup=markup)
-                    # ===========================================================================================================================================
-                    # ссылка для ассистентов
+                # ===========================================================================================================================================
+                # ссылка для ассистентов
                 markup = menu.markup(menu.mainmenu)
                 bot.send_message(message.chat.id, answ.fsi2[1], reply_markup=markup)
                 db.upd_progress(user_id, "users", "1")
 
             elif user[0][8] == 103:
                 markup = menu.inline(user_id)
-                answer = "https://t.me/" + user_name + "\nКлиент " + org[0][5] + " спрашивает:\n" + message.text + "\nact=3"
+                answer = "https://t.me/" + user_name + "\nКлиент " + org[0][
+                    5] + " спрашивает:\n" + message.text + "\nact=3"
                 bot.send_message(config.assists_chat_fsi, answer, reply_markup=markup)
-                    # ===========================================================================================================================================
-                    # ссылка для ассистентов
+                # ===========================================================================================================================================
+                # ссылка для ассистентов
                 markup = menu.markup(menu.mainmenu)
                 bot.send_message(message.chat.id, answ.fsi3[1], reply_markup=markup)
                 db.upd_progress(user_id, "users", "1")
 
-
-            elif user[0][8] >= 200 and user[0][8] <= 208:
+            elif 200 <= user[0][8] <= 208:
                 if message.text == "Отмена":
                     markup = menu.markup(menu.mainmenu)
                     db.upd_progress(user_id, "users", "1")
                     db.upd_org(user_id, "users", "stage", "")
                     bot.send_message(message.chat.id, "Отменено", reply_markup=markup)
                 else:
-                    db.upd_progress(user_id, "users", str(user[0][8]+1))
+                    db.upd_progress(user_id, "users", str(user[0][8] + 1))
                     wrt = user[0][9] + "@@$@@" + message.text
                     db.upd_org(user_id, "users", "stage", wrt)
                     markup = menu.markup(menu.cancel)
-                    bot.send_message(message.chat.id, answ.doc1form2[user[0][8]+1-200], reply_markup=markup)
+                    bot.send_message(message.chat.id, answ.doc1form2[user[0][8] + 1 - 200], reply_markup=markup)
             elif user[0][8] == 209:
                 markup = menu.markup(menu.mainmenu)
                 bot.send_message(message.chat.id, answ.docs1[3], reply_markup=markup)
@@ -262,23 +294,25 @@ def work_acc(message: types.Message):
                 # print(answ.doc1form2)
                 # print(form1_list)
                 # answer = "https://t.me/" + user_name + "\nКлиент " + org[0][5] + " запросил составление договора купли-продажи."
-                answer = rr.company_list.format(user = "https://t.me/" + user_name, org_name = "Клиент " + org[0][5], items = "составление договора купли-продажи.", q = org[0]) + "\n===================\n" + rr.contract_trade.format(w = answ.doc1form2, q = form1_list) + "\nact=4"
+                answer = rr.company_list.format(user="https://t.me/" + user_name, org_name="Клиент " + org[0][5],
+                                                items="составление договора купли-продажи.",
+                                                q=org[0]) + "\n===================\n" + rr.contract_trade.format(
+                    w=answ.doc1form2, q=form1_list) + "\nact=4"
                 bot.send_message(config.assists_chat, answer, reply_markup=markup)
                 # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
                 # Клиент "Название ООО" запросил составление договора купли-продажи.
 
-
-            elif user[0][8] >= 300 and user[0][8] <= 312:
+            elif 300 <= user[0][8] <= 312:
                 if message.text == "Отмена":
                     markup = menu.markup(menu.mainmenu)
                     db.upd_progress(user_id, "users", "1")
                     db.upd_org(user_id, "users", "stage", "")
                     bot.send_message(message.chat.id, "Отменено", reply_markup=markup)
                 else:
-                    db.upd_progress(user_id, "users", str(user[0][8]+1))
+                    db.upd_progress(user_id, "users", str(user[0][8] + 1))
                     db.upd_org(user_id, "users", "stage", user[0][9] + "@@$@@" + message.text)
                     markup = menu.markup(menu.cancel)
-                    bot.send_message(message.chat.id, answ.doc2form3[user[0][8]+1-300], reply_markup=markup)
+                    bot.send_message(message.chat.id, answ.doc2form3[user[0][8] + 1 - 300], reply_markup=markup)
             elif user[0][8] == 313:
                 markup = menu.markup(menu.mainmenu)
                 bot.send_message(message.chat.id, answ.docs1[3], reply_markup=markup)
@@ -290,7 +324,10 @@ def work_acc(message: types.Message):
 
                 markup = menu.inline(user_id)
                 # answer = "https://t.me/" + user_name + "\nКлиент " + org[0][5] + " запросил составление договора купли-продажи."
-                answer = rr.company_list.format(user = "https://t.me/" + user_name, org_name = "Клиент " + org[0][5], items = "составление договора об оказании услуг плательщика НПД.", q = org[0]) + "\n===================\n" + rr.contract_NPD.format(w = answ.doc2form3, q = form1_list) + "\nact=5"
+                answer = rr.company_list.format(user="https://t.me/" + user_name, org_name="Клиент " + org[0][5],
+                                                items="составление договора об оказании услуг плательщика НПД.",
+                                                q=org[0]) + "\n===================\n" + rr.contract_NPD.format(
+                    w=answ.doc2form3, q=form1_list) + "\nact=5"
                 bot.send_message(config.assists_chat, answer, reply_markup=markup)
 
                 # markup = menu.inline(user_id)
@@ -299,19 +336,18 @@ def work_acc(message: types.Message):
                 # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
                 # Клиент "Название ООО" запросил составление договора об оказании услуг плательщика НПД.
 
-
-            elif user[0][8] >= 400 and user[0][8] <= 412:
+            elif 400 <= user[0][8] <= 412:
                 if message.text == "Отмена":
                     markup = menu.markup(menu.mainmenu)
                     db.upd_progress(user_id, "users", "1")
                     db.upd_org(user_id, "users", "stage", "")
                     bot.send_message(message.chat.id, "Отменено", reply_markup=markup)
                 else:
-                    db.upd_progress(user_id, "users", str(user[0][8]+1))
+                    db.upd_progress(user_id, "users", str(user[0][8] + 1))
                     wrt = user[0][9] + "@@$@@" + message.text
                     db.upd_org(user_id, "users", "stage", wrt)
                     markup = menu.markup(menu.cancel)
-                    bot.send_message(message.chat.id, answ.doc3form4[user[0][8]+1-400], reply_markup=markup)
+                    bot.send_message(message.chat.id, answ.doc3form4[user[0][8] + 1 - 400], reply_markup=markup)
             elif user[0][8] == 413:
                 markup = menu.markup(menu.mainmenu)
                 bot.send_message(message.chat.id, answ.docs1[3], reply_markup=markup)
@@ -323,27 +359,31 @@ def work_acc(message: types.Message):
 
                 markup = menu.inline(user_id)
                 # answer = "https://t.me/" + user_name + "\nКлиент " + org[0][5] + " запросил составление договора купли-продажи."
-                answer = rr.company_list.format(user = "https://t.me/" + user_name, org_name = "Клиент " + org[0][5], items = "составление договора ГПХ с физическим лицом.", q = org[0]) + "\n===================\n" + rr.contract_GPH_F.format(w = answ.doc3form4, q = form1_list) + "\nact=6"
+                answer = rr.company_list.format(user="https://t.me/" + user_name, org_name="Клиент " + org[0][5],
+                                                items="составление договора ГПХ с физическим лицом.",
+                                                q=org[0]) + "\n===================\n" + rr.contract_GPH_F.format(
+                    w=answ.doc3form4, q=form1_list) + "\nact=6"
                 bot.send_message(config.assists_chat, answer, reply_markup=markup)
                 # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
                 # Клиент "Название ООО" запросил составление договора ГПХ с физическим лицом.
 
-
-            elif user[0][8] >= 500 and user[0][8] <= 509:
+            elif 500 <= user[0][8] <= 509:
                 if message.text == "Отмена":
                     markup = menu.markup(menu.mainmenu)
                     db.upd_progress(user_id, "users", "1")
                     db.upd_org(user_id, "users", "stage", "")
                     bot.send_message(message.chat.id, "Отменено", reply_markup=markup)
                 else:
-                    db.upd_progress(user_id, "users", str(user[0][8]+1))
+                    db.upd_progress(user_id, "users", str(user[0][8] + 1))
                     wrt = user[0][9] + "@@$@@" + message.text
                     db.upd_org(user_id, "users", "stage", wrt)
                     markup = menu.markup(menu.cancel)
-                    bot.send_message(message.chat.id, answ.doc3form5[user[0][8]+1-500], reply_markup=markup)
+                    bot.send_message(message.chat.id, answ.doc3form5[user[0][8] + 1 - 500], reply_markup=markup)
             elif user[0][8] == 510:
                 markup = menu.markup(menu.mainmenu)
-                bot.send_message(message.chat.id, "Спасибо, я сделал договор, как свободный бухгалтер его проверит я сразу же отправлю его тебе", reply_markup=markup)
+                bot.send_message(message.chat.id,
+                                 "Спасибо, я сделал договор, как свободный бухгалтер его проверит я сразу же отправлю его тебе",
+                                 reply_markup=markup)
                 db.upd_progress(user_id, "users", "1")
                 form1_list = user[0][9].split('@@$@@')
                 form1_list.append(message.text)
@@ -351,24 +391,30 @@ def work_acc(message: types.Message):
                 del form1_list[0]
 
                 markup = menu.inline(user_id)
-                answer = rr.company_list.format(user = "https://t.me/" + user_name, org_name = "Клиент " + org[0][5], items = "составление договора ГПХ с юридическим лицом.", q = org[0]) + "\n===================\n" + rr.contract_GPH_U.format(w = answ.doc3form5, q = form1_list) + "\nact=7"
+                answer = rr.company_list.format(user="https://t.me/" + user_name, org_name="Клиент " + org[0][5],
+                                                items="составление договора ГПХ с юридическим лицом.",
+                                                q=org[0]) + "\n===================\n" + rr.contract_GPH_U.format(
+                    w=answ.doc3form5, q=form1_list) + "\nact=7"
                 bot.send_message(config.assists_chat, answer, reply_markup=markup)
 
-            elif user[0][8] >= 600 and user[0][8] <= 615:
+            elif 600 <= user[0][8] <= 615:
                 if message.text == "Отмена":
                     markup = menu.markup(menu.mainmenu)
                     db.upd_progress(user_id, "users", "1")
                     db.upd_org(user_id, "users", "stage", "")
                     bot.send_message(message.chat.id, "Отменено", reply_markup=markup)
                 else:
-                    db.upd_progress(user_id, "users", str(user[0][8]+1))
+                    db.upd_progress(user_id, "users", str(user[0][8] + 1))
                     wrt = user[0][9] + "@@$@@" + message.text
                     db.upd_org(user_id, "users", "stage", wrt)
                     markup = menu.markup(menu.cancel)
-                    bot.send_message(message.chat.id, answ.worksform6[user[0][8]+1-600], reply_markup=markup)
+                    bot.send_message(message.chat.id, answ.worksform6[user[0][8] + 1 - 600], reply_markup=markup)
             elif user[0][8] == 616:
                 markup = menu.markup(menu.mainmenu)
-                bot.send_message(message.chat.id, "Спасибо, я сделал договор, как свободный бухгалтер его проверит я сразу же отправлю его тебе", reply_markup=markup)
+                bot.send_message(message.chat.id,
+                                 "Спасибо, я сделал договор, как свободный бухгалтер его проверит я сразу же "
+                                 "отправлю его тебе",
+                                 reply_markup=markup)
                 db.upd_progress(user_id, "users", "1")
                 form1_list = user[0][9].split('@@$@@')
                 form1_list.append(message.text)
@@ -377,7 +423,10 @@ def work_acc(message: types.Message):
                 db.add_worker(org, form1_list)
 
                 markup = menu.inline(user_id)
-                answer = rr.company_list.format(user = "https://t.me/" + user_name, org_name = "Клиент " + org[0][5], items = "составление договора найма нового сотрудника.", q = org[0]) + "\n===================\n" + rr.contract_hiring.format(w = answ.worksform6, q = form1_list) + "\nact=8"
+                answer = rr.company_list.format(user="https://t.me/" + user_name, org_name="Клиент " + org[0][5],
+                                                items="составление договора найма нового сотрудника.",
+                                                q=org[0]) + "\n===================\n" + rr.contract_hiring.format(
+                    w=answ.worksform6, q=form1_list) + "\nact=8"
                 bot.send_message(config.assists_chat, answer, reply_markup=markup)
             elif user[0][8] == 50:
                 summ = message.text
@@ -386,37 +435,41 @@ def work_acc(message: types.Message):
                 summ = summ.replace("   ", "")
                 summ = summ.replace("  ", "")
                 summ = summ.replace(" ", "")
-                
+
                 # try:
                 float(summ)
-            
+
                 db.upd_progress(user_id, "users", "1")
                 worker = user[0][10]
                 markup = menu.markup(menu.mainmenu)
-                bot.send_message(message.chat.id, "Спасибо, я сделал дополнительное соглашение к трудовому договору, как свободный бухгалтер его проверит я сразу же отправлю его тебе", reply_markup=markup)
+                bot.send_message(message.chat.id,
+                                 "Спасибо, я сделал дополнительное соглашение к трудовому договору, как свободный бухгалтер его проверит я сразу же отправлю его тебе",
+                                 reply_markup=markup)
                 work = db.get_work(worker)
                 db.upd_worker2(str(work[0][0]), "workers", "bet_size", summ)
                 db.upd_org(user_id, "users", "target1", "")
 
                 markup = menu.inline(user_id)
-                answer = "Клиент " + org[0][5] + " хочет изменить оклад сотрудника " + work[0][5] + " на " + summ + "\nact=9"
+                answer = "Клиент " + org[0][5] + " хочет изменить оклад сотрудника " + work[0][
+                    5] + " на " + summ + "\nact=9"
                 bot.send_message(config.assists_chat, answer, reply_markup=markup)
-
 
             elif user[0][8] == 51:
                 new_d = message.text
-            
+
                 db.upd_progress(user_id, "users", "1")
                 worker = user[0][10]
                 work = db.get_work(worker)
                 markup = menu.inline(user_id)
-                answer = "Клиент " + org[0][5] + " хочет изменить должность сотрудника " + work[0][5] + " на " + new_d + "\nact=10"
+                answer = "Клиент " + org[0][5] + " хочет изменить должность сотрудника " + work[0][
+                    5] + " на " + new_d + "\nact=10"
                 db.upd_worker2(str(work[0][0]), "workers", "jtitle", new_d)
                 bot.send_message(config.assists_chat, answer, reply_markup=markup)
                 markup = menu.markup(menu.mainmenu)
-                bot.send_message(message.chat.id, "Спасибо, я сделал дополнительное соглашение к трудовому договору, как свободный бухгалтер его проверит я сразу же отправлю его тебе", reply_markup=markup)
+                bot.send_message(message.chat.id,
+                                 "Спасибо, я сделал дополнительное соглашение к трудовому договору, как свободный бухгалтер его проверит я сразу же отправлю его тебе",
+                                 reply_markup=markup)
                 db.upd_org(user_id, "users", "target1", "")
-                
 
             elif user[0][8] >= 700 and user[0][8] <= 708:
                 if message.text == "Отмена":
@@ -425,18 +478,22 @@ def work_acc(message: types.Message):
                     db.upd_org(user_id, "users", "stage", "")
                     bot.send_message(message.chat.id, "Отменено", reply_markup=markup)
                 else:
-                    db.upd_progress(user_id, "users", str(user[0][8]+1))
+                    db.upd_progress(user_id, "users", str(user[0][8] + 1))
                     wrt = user[0][9] + "@@$@@" + message.text
                     db.upd_org(user_id, "users", "stage", wrt)
                     markup = menu.markup(menu.cancel2)
                     if "Пропустить" == message.text:
-                        bot.send_message(message.chat.id, "Пропущено: \n"+answ.worksform7[user[0][8]+1-700], reply_markup=markup)
+                        bot.send_message(message.chat.id, "Пропущено: \n" + answ.worksform7[user[0][8] + 1 - 700],
+                                         reply_markup=markup)
                     else:
-                        bot.send_message(message.chat.id, "Данные изменены: \n"+answ.worksform7[user[0][8]+1-700], reply_markup=markup)
+                        bot.send_message(message.chat.id, "Данные изменены: \n" + answ.worksform7[user[0][8] + 1 - 700],
+                                         reply_markup=markup)
 
             elif user[0][8] == 709:
                 markup = menu.markup(menu.cancel2)
-                bot.send_message(message.chat.id, "Спасибо, я сделал дополнительное соглашение к трудовому договору, как свободный бухгалтер его проверит я сразу же отправлю его тебе", reply_markup=markup)
+                bot.send_message(message.chat.id,
+                                 "Спасибо, я сделал дополнительное соглашение к трудовому договору, как свободный бухгалтер его проверит я сразу же отправлю его тебе",
+                                 reply_markup=markup)
                 db.upd_progress(user_id, "users", "1")
                 form1_list = user[0][9].split('@@$@@')
                 form1_list.append(message.text)
@@ -448,11 +505,8 @@ def work_acc(message: types.Message):
                         db.upd_worker2(org[0][0], "workers", answ.works_db_form[i], form1_list[i])
 
                 markup = menu.inline(user_id)
-                #answer = "Клиент " + org[0][5] + "хочет изменить личные данные сотрудника " + work[0][5] + "\n===================\n" + rr.contract_hiring.format(w = answ.worksform7, q = form1_list) + "\nact=11"
-                #bot.send_message(config.assists_chat, answer, reply_markup=markup)
-
-
-
+                # answer = "Клиент " + org[0][5] + "хочет изменить личные данные сотрудника " + work[0][5] + "\n===================\n" + rr.contract_hiring.format(w = answ.worksform7, q = form1_list) + "\nact=11"
+                # bot.send_message(config.assists_chat, answer, reply_markup=markup)
 
             elif message.text.lower() == "/помощь":
                 markup = menu.markup(menu.mainmenu)
@@ -470,7 +524,6 @@ def work_acc(message: types.Message):
                 if menu.qs.index(message.text) == 11:
                     db.upd_progress(user_id, "users", "91")
 
-
             elif message.text.lower() == "/фси":
                 markup = menu.markup(menu.fsi1)
                 bot.send_message(message.chat.id, answ.fsi1[0], reply_markup=markup)
@@ -480,13 +533,12 @@ def work_acc(message: types.Message):
                 bot.send_message(message.chat.id, answ.fsi1[1], reply_markup=markup)
                 answer = "Клиент " + org[0][5] + " хочет получить финансовый отчёт" + "\nact=12"
                 bot.send_message(config.assists_chat_fsi, answer, reply_markup=None)
-                    # ===========================================================================================================================================
-                    # Клиент "Название ООО" хочет получить финансовый отчёт
+                # ===========================================================================================================================================
+                # Клиент "Название ООО" хочет получить финансовый отчёт
 
             elif message.text == "У меня есть вопрос по работе с фондом.":
                 markup = menu.markup(menu.fsi2)
                 bot.send_message(message.chat.id, answ.fsi1[2], reply_markup=markup)
-
 
             elif message.text == "Письменную":
                 markup = menu.markup(menu.mainmenu)
@@ -502,16 +554,17 @@ def work_acc(message: types.Message):
                 markup = menu.markup(menu.docs1)
                 bot.send_message(message.chat.id, answ.docs0[0], reply_markup=markup)
 
-
-        # !
+            # !
             elif message.text == "Договор купли/продажи":
                 markup = menu.markup(menu.docs21)
                 bot.send_message(message.chat.id, answ.docs1[0], reply_markup=markup)
 
             elif message.text == "Хoчу шаблон":
                 markup = menu.markup(menu.mainmenu)
-                bot.send_document(message.chat.id, document = open(os.path.abspath(__file__)[:-7] + 'Договор куплипродажи-продажи (шаблон).doc', 'rb'), reply_markup=markup)
-                
+                bot.send_document(message.chat.id, document=open(
+                    os.path.abspath(__file__)[:-7] + 'Договор куплипродажи-продажи (шаблон).doc', 'rb'),
+                                  reply_markup=markup)
+
             elif message.text == "Хочу весь дoговор":
                 markup = menu.markup(menu.cancel)
                 bot.send_message(message.chat.id, answ.docs1[1], reply_markup=markup)
@@ -519,32 +572,34 @@ def work_acc(message: types.Message):
                 bot.send_message(message.chat.id, answ.doc1form2[0], reply_markup=markup)
                 db.upd_progress(user_id, "users", "200")
 
-
-        # !
+            # !
             elif message.text == "Договор для работы с самозанятыми":
                 markup = menu.markup(menu.docs22)
                 bot.send_message(message.chat.id, answ.docs1[0], reply_markup=markup)
 
             elif message.text == "Хочy шаблон":
                 markup = menu.markup(menu.mainmenu)
-                bot.send_document(message.chat.id, document = open(os.path.abspath(__file__)[:-7] + 'Договор оказания услуг самозанятым (шаблон).doc', 'rb'), reply_markup=markup)
-                
+                bot.send_document(message.chat.id, document=open(
+                    os.path.abspath(__file__)[:-7] + 'Договор оказания услуг самозанятым (шаблон).doc', 'rb'),
+                                  reply_markup=markup)
+
             elif message.text == "Хочу весь догoвор":
                 markup = menu.markup(menu.cancel)
                 bot.send_message(message.chat.id, answ.docs2[0], reply_markup=markup)
                 bot.send_message(message.chat.id, answ.doc2form3[0], reply_markup=markup)
                 db.upd_progress(user_id, "users", "300")
 
-
-        # !
+            # !
             elif message.text == "Договoр ГПХ":
                 markup = menu.markup(menu.docs23)
                 bot.send_message(message.chat.id, answ.docs1[0], reply_markup=markup)
 
             elif message.text == "Хoчy шаблон":
                 markup = menu.markup(menu.mainmenu)
-                bot.send_document(message.chat.id, document = open(os.path.abspath(__file__)[:-7] + 'Договор ГПХ (шаблон).docx', 'rb'), reply_markup=markup)
-                
+                bot.send_document(message.chat.id,
+                                  document=open(os.path.abspath(__file__)[:-7] + 'Договор ГПХ (шаблон).docx', 'rb'),
+                                  reply_markup=markup)
+
             elif message.text == "Хочу весь договoр":
                 markup = menu.markup(menu.docs3)
                 bot.send_message(message.chat.id, "Договор на юридическое или физическое лицо?", reply_markup=markup)
@@ -561,8 +616,7 @@ def work_acc(message: types.Message):
                 bot.send_message(message.chat.id, answ.doc3form5[0], reply_markup=markup)
                 db.upd_progress(user_id, "users", "500")
 
-
-        # !
+            # !
             elif message.text.lower() == "/сотрудники":
                 markup = menu.markup(menu.works1)
                 bot.send_message(message.chat.id, answ.works1[0], reply_markup=markup)
@@ -573,7 +627,6 @@ def work_acc(message: types.Message):
                 bot.send_message(message.chat.id, answ.worksform6[0], reply_markup=markup)
                 db.upd_progress(user_id, "users", "600")
 
-            
             elif message.text == "Уволить сотрудника":
                 inline_list = db.get_works(str(org[0][0]))
                 markup = menu.inline_list(inline_list, "worker_list7")
@@ -582,23 +635,27 @@ def work_acc(message: types.Message):
                 else:
                     bot.send_message(message.chat.id, "Нет сотрудников", reply_markup=markup)
 
-        # !
+            # !
             elif message.text == "Изменить условия для сотрудника":
                 inline_list = db.get_works(str(org[0][0]))
                 markup = menu.inline_list(inline_list, "worker_list1")
                 if len(inline_list) > 0:
-                    bot.send_message(message.chat.id, "Для какого сотрудника ты хочешь внести изменения?", reply_markup=markup)
+                    bot.send_message(message.chat.id, "Для какого сотрудника ты хочешь внести изменения?",
+                                     reply_markup=markup)
                 else:
                     bot.send_message(message.chat.id, "Нет сотрудников", reply_markup=markup)
 
             elif message.text == "Изменить оклад":
                 markup = menu.markup(menu.mainmenu)
-                bot.send_message(message.chat.id, "Какой месячный оклад ты хочешь установить для этого сотрудника?Помни, что \"На руки \" сотрудник получит суммы с вычетом 13%", reply_markup=markup)
+                bot.send_message(message.chat.id,
+                                 "Какой месячный оклад ты хочешь установить для этого сотрудника?Помни, что \"На руки \" сотрудник получит суммы с вычетом 13%",
+                                 reply_markup=markup)
                 db.upd_progress(user_id, "users", "50")
 
             elif message.text == "Изменить должность":
                 markup = menu.markup(menu.mainmenu)
-                bot.send_message(message.chat.id, "Какую должность теперь занимает этот сотрудник?", reply_markup=markup)
+                bot.send_message(message.chat.id, "Какую должность теперь занимает этот сотрудник?",
+                                 reply_markup=markup)
                 db.upd_progress(user_id, "users", "51")
 
             elif message.text == "Изменить личные данные":
@@ -607,15 +664,15 @@ def work_acc(message: types.Message):
                 bot.send_message(message.chat.id, answ.worksform6[0], reply_markup=markup)
                 db.upd_progress(user_id, "users", "700")
 
-        # !
+            # !
             elif message.text.lower() == "/моя компания":
                 markup = menu.markup(menu.my_company)
                 bot.send_message(message.chat.id, "Какую информацию ты хочешь узнать?", reply_markup=markup)
-            
+
             elif message.text == "Данные о компании":
                 markup = menu.markup(menu.my_company)
                 bot.send_message(message.chat.id, answ.my_org(org), reply_markup=markup)
-            
+
             elif message.text == "Данные сотрудников":
                 inline_list = db.get_works(str(org[0][0]))
                 markup = menu.inline_list(inline_list, "worker_list2")
@@ -623,7 +680,7 @@ def work_acc(message: types.Message):
                     bot.send_message(message.chat.id, "Данные какого сотрудника тебе нужны?", reply_markup=markup)
                 else:
                     bot.send_message(message.chat.id, "Нет сотрудников", reply_markup=markup)
-            
+
             elif message.text == "Реквизиты счёта":
                 markup = menu.markup(menu.my_company)
                 answer = answ.req_acc.format(org[0][15], org[0][16], org[0][18], org[0][17], org[0][8])
@@ -651,30 +708,27 @@ def work_acc(message: types.Message):
                     elif "document" in x['mimeType']:
                         inline_list.append([x['name'], "2" + x['id']])
 
-
                 markup = menu.inline_list2(inline_list, "worker_list3")
-                
+
                 if len(inline_list) > 0:
                     bot.send_message(message.chat.id, "Какой документ тебе отправить?", reply_markup=markup)
                 else:
                     bot.send_message(message.chat.id, "Нет документов", reply_markup=markup)
 
-
-
-        # !
+            # !
             elif message.text.lower() == "/1с":
                 markup = menu.markup(menu.d_1c)
                 bot.send_message(message.chat.id, "Какой документ ты хочешь загрузить?", reply_markup=markup)
-            
+
             elif message.text in menu.d_1c:
                 # print(menu.d_1c.index(message.text))
                 markup = menu.markup(menu.mainmenu)
                 ind = menu.d_1c.index(message.text)
-                db.upd_progress(user_id, "users", str(40+ind))
+                db.upd_progress(user_id, "users", str(40 + ind))
                 bot.send_message(message.chat.id, answ.d_1c[ind], reply_markup=markup)
 
-        # !  
-            elif message.text.lower() == "/1с_выгрузка":  
+            # !
+            elif message.text.lower() == "/1с_выгрузка":
                 markup = menu.markup(menu.mainmenu)
                 bot.send_message(message.chat.id, "Формирую выгрузку, скоро я тебе её отправлю", reply_markup=markup)
 
@@ -682,7 +736,7 @@ def work_acc(message: types.Message):
                 answer = "https://t.me/" + user_name + "\nКлиент " + org[0][5] + " запросил выгрузку из 1С"
                 bot.send_message(config.assists_chat, answer, reply_markup=markup)
 
-        # !
+            # !
             elif message.text == "Отчёты в налоговые органы":
 
                 inline_list = list()
@@ -705,9 +759,8 @@ def work_acc(message: types.Message):
                     elif "document" in x['mimeType']:
                         inline_list.append(["ФСС - " + x['name'], "2" + x['id']])
 
-
                 markup = menu.inline_list2(inline_list, "worker_list8")
-                
+
                 if len(inline_list) > 0:
                     bot.send_message(message.chat.id, "Какой документ тебе отправить?", reply_markup=markup)
                 else:
@@ -717,9 +770,9 @@ def work_acc(message: types.Message):
                 markup = None
 
         if message.chat.id > 0 and user[0][7] == "assistant":
-            
+
             if message.reply_to_message:
-                
+
                 if user[0][7] == "assistant":
                     reply_text = message.reply_to_message.text
                     if "act=2" in reply_text[-30:] or "act=3" in reply_text[-30:]:
@@ -729,9 +782,7 @@ def work_acc(message: types.Message):
                         user_ids = reply_text[label:]
                         bot.send_message(user_ids, message.text)
 
-
-
-            elif user[0][8] >= 4600 and user[0][8] <= 4615:
+            elif 4600 <= user[0][8] <= 4615:
                 if message.text == "Отмена":
                     markup = menu.markup(menu.mainmenu)
                     db.upd_progress(user_id, "users", "1")
@@ -740,11 +791,11 @@ def work_acc(message: types.Message):
                     db.upd_org(user_id, "users", "target2", "")
                     bot.send_message(message.chat.id, "Отменено", reply_markup=markup)
                 else:
-                    db.upd_progress(user_id, "users", str(user[0][8]+1))
+                    db.upd_progress(user_id, "users", str(user[0][8] + 1))
                     wrt = user[0][9] + "@@$@@" + message.text
                     db.upd_org(user_id, "users", "stage", wrt)
                     markup = menu.markup(menu.cancel)
-                    bot.send_message(message.chat.id, answ.worksform6[user[0][8]+1-4600], reply_markup=markup)
+                    bot.send_message(message.chat.id, answ.worksform6[user[0][8] + 1 - 4600], reply_markup=markup)
             elif user[0][8] == 4616:
                 markup = menu.markup(menu.mainmenu)
                 # bot.send_message(message.chat.id, "Спасибо, я сделал договор, как свободный бухгалтер его проверит я сразу же отправлю его тебе", reply_markup=markup)
@@ -757,7 +808,6 @@ def work_acc(message: types.Message):
                 db.upd_org(user_id, "users", "target1", "")
                 db.upd_org(user_id, "users", "target2", "")
                 db.add_worker(user[0][11], form1_list)
-                
 
             elif user[0][8] == 4001:
                 summ = message.text
@@ -766,10 +816,10 @@ def work_acc(message: types.Message):
                 summ = summ.replace("  ", "")
                 summ = summ.replace(" ", "")
                 markup = menu.markup(menu.mainmenu)
-                
+
                 try:
                     float(summ)
-                
+
                     db.upd_progress(user_id, "users", "1")
                     db.upd_worker2(str(user[0][10]), "workers", "bet_size", summ)
 
@@ -783,8 +833,7 @@ def work_acc(message: types.Message):
             elif user[0][8] == 4003:
                 markup = menu.markup(menu.mainmenu)
                 new_d = message.text
-                
-            
+
                 db.upd_progress(user_id, "users", "1")
                 db.upd_worker2(str(user[0][10]), "workers", "jtitle", new_d)
                 bot.send_message(message.chat.id, "Должность изменена", reply_markup=markup)
@@ -792,21 +841,22 @@ def work_acc(message: types.Message):
                 db.upd_org(user_id, "users", "target1", "")
                 db.upd_org(user_id, "users", "target2", "")
 
-            elif user[0][8] >= 4050 and user[0][8] <= 4058:
+            elif 4050 <= user[0][8] <= 4058:
                 if message.text == "Отмена":
                     markup = menu.markup(menu.mainmenu)
                     db.upd_progress(user_id, "users", "1")
                     db.upd_org(user_id, "users", "stage", "")
                     db.upd_org(user_id, "users", "target1", "")
                     db.upd_org(user_id, "users", "target2", "")
-                    
+
                     bot.send_message(message.chat.id, "Отменено", reply_markup=markup)
                 else:
-                    db.upd_progress(user_id, "users", str(user[0][8]+1))
+                    db.upd_progress(user_id, "users", str(user[0][8] + 1))
                     wrt = user[0][9] + "@@$@@" + message.text
                     db.upd_org(user_id, "users", "stage", wrt)
                     markup = menu.markup(menu.cancel2)
-                    bot.send_message(message.chat.id, answ.worksform7[user[0][8]+1-4050], reply_markup=markup)
+                    bot.send_message(message.chat.id, answ.worksform7[user[0][8] + 1 - 4050], reply_markup=markup)
+
             elif user[0][8] == 4059:
                 markup = menu.markup(menu.mainmenu)
                 bot.send_message(message.chat.id, "Данные обновлены", reply_markup=markup)
@@ -823,14 +873,15 @@ def work_acc(message: types.Message):
                         db.upd_worker2(user[0][10], "workers", answ.works_db_form[i], form1_list[i])
 
             elif message.text.lower() == "/помощь":
-                
+
                 markup = menu.markup(menu.mainmenu)
                 bot.send_message(message.chat.id, answ.help_a, reply_markup=markup)
 
             elif message.text.lower() == "/чат":
                 orgs = db.get_org_all()
                 markup = menu.inline_list3(orgs, "orgs_list")
-                bot.send_message(message.chat.id, "Руководителю какой компании ты хочешь написать?", reply_markup=markup)
+                bot.send_message(message.chat.id, "Руководителю какой компании ты хочешь написать?",
+                                 reply_markup=markup)
 
             elif message.text.lower() == "/ооо":
                 orgs = db.get_org_all()
@@ -844,12 +895,14 @@ def work_acc(message: types.Message):
             elif message.text == "Посмотреть данные сoтрудника":
                 orgs = db.get_org_all()
                 markup = menu.inline_list3(orgs, "3orgs_list")
-                bot.send_message(message.chat.id, "Сотрудников какой компании ты хочешь посмотреть?", reply_markup=markup)
+                bot.send_message(message.chat.id, "Сотрудников какой компании ты хочешь посмотреть?",
+                                 reply_markup=markup)
 
             elif message.text == "Устроить нового сoтрудника":
                 orgs = db.get_org_all()
                 markup = menu.inline_list3(orgs, "4orgs_list")
-                bot.send_message(message.chat.id, "В какую компанию ты хочешь устроить сотрудника?", reply_markup=markup)
+                bot.send_message(message.chat.id, "В какую компанию ты хочешь устроить сотрудника?",
+                                 reply_markup=markup)
 
             elif message.text == "Уволить сoтрудника":
                 orgs = db.get_org_all()
@@ -859,7 +912,8 @@ def work_acc(message: types.Message):
             elif message.text == "Внести изменения в карточку сoтрудника":
                 orgs = db.get_org_all()
                 markup = menu.inline_list3(orgs, "6orgs_list")
-                bot.send_message(message.chat.id, "В карточку сотрудника какой компании ты хочешь внести изменения?", reply_markup=markup)
+                bot.send_message(message.chat.id, "В карточку сотрудника какой компании ты хочешь внести изменения?",
+                                 reply_markup=markup)
 
             elif message.text.lower() == "/отчёты":
                 orgs = db.get_org_all()
@@ -895,11 +949,12 @@ def callback_inline(call):
             if call.data[:13] == 'worker_list1=':
                 # print(call.data[12:])
                 worker = db.get_work(call.data[13:])
-                
+
                 db.upd_org(user_id, "users", "target1", call.data[13:])
 
                 answer = "Выбран: " + worker[0][5]
-                bot.edit_message_text(chat_id=chat_id, message_id=call.message.message_id, text = answer, reply_markup=None)
+                bot.edit_message_text(chat_id=chat_id, message_id=call.message.message_id, text=answer,
+                                      reply_markup=None)
                 markup = menu.markup(menu.works2)
                 bot.send_message(chat_id, "Что ты хочешь поменять?", reply_markup=markup)
 
@@ -908,16 +963,19 @@ def callback_inline(call):
                 if len(worker) > 0:
                     db.del_worker(call.data[13:])
                     answer = "Сотрудник " + worker[0][5] + " уволен"
-                    bot.edit_message_text(chat_id=chat_id, message_id=call.message.message_id, text = answer, reply_markup=None)
-                    
-                    answer = "https://t.me/" + user_name + "\nКлиент " + org[0][5] + " уволил сотрудника " + worker[0][5]
+                    bot.edit_message_text(chat_id=chat_id, message_id=call.message.message_id, text=answer,
+                                          reply_markup=None)
+
+                    answer = "https://t.me/" + user_name + "\nКлиент " + org[0][5] + " уволил сотрудника " + worker[0][
+                        5]
                     bot.send_message(config.assists_chat, answer, reply_markup=None)
 
             elif call.data[:13] == 'worker_list2=':
                 markup = menu.markup(menu.mainmenu)
                 # print(call.data[12:])
                 worker = db.get_work(call.data[13:])
-                bot.edit_message_text(chat_id=chat_id, message_id=call.message.message_id, text = answ.worker(worker), reply_markup=markup)
+                bot.edit_message_text(chat_id=chat_id, message_id=call.message.message_id, text=answ.worker(worker),
+                                      reply_markup=markup)
 
             elif call.data[:13] == "worker_list3=":
                 markup = menu.markup(menu.mainmenu)
@@ -926,7 +984,7 @@ def callback_inline(call):
                 elif call.data[13] == "2":
                     answer = "https://docs.google.com/document/d/" + call.data[14:]
                 bot.send_message(chat_id, answer, reply_markup=markup)
-                
+
 
             elif call.data[:13] == "worker_list8=":
                 markup = menu.markup(menu.mainmenu)
@@ -936,7 +994,6 @@ def callback_inline(call):
                     answer = "https://docs.google.com/document/d/" + call.data[14:]
                 bot.send_message(chat_id, answer, reply_markup=markup)
 
-
         if user[0][7] == "assistant":
             if call.data[:5] == 'take=':
                 db.upd_org(user_id, "users", "status", "assistant")
@@ -945,13 +1002,14 @@ def callback_inline(call):
                 # print(user_cl)
                 if user_cl != "stop":
                     org_cl = db.get_org(user_id)
-                    answer = "от https://t.me/" + user_cl[0][2] + "\nпринят следующий запрос:\n" + call.message.text + "\nuser: " + call.data[5:]
-
+                    answer = "от https://t.me/" + user_cl[0][
+                        2] + "\nпринят следующий запрос:\n" + call.message.text + "\nuser: " + call.data[5:]
 
                     markup = menu.markup(menu.mainmenu)
                     # print(call.data[12:])
                     worker = db.get_work(call.data[13:])
-                    bot.edit_message_text(chat_id=chat_id, message_id=call.message.message_id, text = call.message.text + "\n взял: " + user_name, reply_markup=None)
+                    bot.edit_message_text(chat_id=chat_id, message_id=call.message.message_id,
+                                          text=call.message.text + "\n взял: " + user_name, reply_markup=None)
                     bot.send_message(user_id, answer, reply_markup=markup)
                 else:
                     print("не take=" + call.data)
@@ -960,33 +1018,37 @@ def callback_inline(call):
                 user_cl = db.get_user(call.data[10:], "stop")
                 if user_cl != "stop":
                     org_cl = db.get_org(call.data[10:])
-                    answer = "Передать сообщение " + str(org_cl[0][5]) + "\nhttps://t.me/" + user_cl[0][2] + "\nact=3\nuser: " + call.data[10:]
-                    bot.edit_message_text(chat_id=chat_id, message_id=call.message.message_id, text = answer, reply_markup=None)
+                    answer = "Передать сообщение " + str(org_cl[0][5]) + "\nhttps://t.me/" + user_cl[0][
+                        2] + "\nact=3\nuser: " + call.data[10:]
+                    bot.edit_message_text(chat_id=chat_id, message_id=call.message.message_id, text=answer,
+                                          reply_markup=None)
 
             if call.data[:11] == '2orgs_list=':
                 user_cl = db.get_user(call.data[11:], "stop")
                 if user_cl != "stop":
                     org_cl = db.get_org(call.data[11:])
                     markup = menu.inline_list2(menu.assist_org_inf, "assistand_org_inf")
-                    answer = "Какую информацию ты хочешь получить?\nВыбрано: " + str(org_cl[0][5]) + "\n org_id - " + call.data[11:]
-                    bot.edit_message_text(chat_id=chat_id, message_id=call.message.message_id, text = answer, reply_markup=markup)
+                    answer = "Какую информацию ты хочешь получить?\nВыбрано: " + str(
+                        org_cl[0][5]) + "\n org_id - " + call.data[11:]
+                    bot.edit_message_text(chat_id=chat_id, message_id=call.message.message_id, text=answer,
+                                          reply_markup=markup)
 
             if call.data == 'assistand_org_inf=req':
-                label = call.message.text.rfind("org_id - ") +9
+                label = call.message.text.rfind("org_id - ") + 9
                 org_cl = db.get_org(call.message.text[label:])
                 answer = answ.req_acc.format(org_cl[0][15], org_cl[0][16], org_cl[0][18], org_cl[0][17], org_cl[0][8])
-                bot.edit_message_text(chat_id=chat_id, message_id=call.message.message_id, text = answer, reply_markup=None)
+                bot.edit_message_text(chat_id=chat_id, message_id=call.message.message_id, text=answer,
+                                      reply_markup=None)
 
             if call.data == 'assistand_org_inf=dat':
-                label = call.message.text.rfind("org_id - ") +9
+                label = call.message.text.rfind("org_id - ") + 9
                 org_cl = db.get_org(call.message.text[label:])
                 answer = answ.my_org(org_cl)
-                bot.edit_message_text(chat_id=chat_id, message_id=call.message.message_id, text = answer, reply_markup=None)
-
-
+                bot.edit_message_text(chat_id=chat_id, message_id=call.message.message_id, text=answer,
+                                      reply_markup=None)
 
             if call.data == 'assistand_org_inf=doc':
-                label = call.message.text.rfind("org_id - ") +9
+                label = call.message.text.rfind("org_id - ") + 9
                 org_cl = db.get_org(call.message.text[label:])
 
                 inline_list = list()
@@ -1009,12 +1071,13 @@ def callback_inline(call):
                     elif "document" in x['mimeType']:
                         inline_list.append([x['name'], "2" + x['id']])
 
-
                 markup = menu.inline_list2(inline_list, "worker_list3")
                 if len(inline_list) > 0:
-                    bot.edit_message_text(chat_id=chat_id, message_id=call.message.message_id, text = "Какой документ тебе отправить?", reply_markup=markup)
+                    bot.edit_message_text(chat_id=chat_id, message_id=call.message.message_id,
+                                          text="Какой документ тебе отправить?", reply_markup=markup)
                 else:
-                    bot.edit_message_text(chat_id=chat_id, message_id=call.message.message_id, text = "Нет документов", reply_markup=markup)
+                    bot.edit_message_text(chat_id=chat_id, message_id=call.message.message_id, text="Нет документов",
+                                          reply_markup=markup)
 
             if call.data[:13] == "worker_list3=":
                 markup = menu.markup(menu.mainmenu)
@@ -1031,10 +1094,12 @@ def callback_inline(call):
                     inline_list = db.get_works(str(org_cl[0][0]))
                     markup = menu.inline_list(inline_list, "worker_list4")
                     if len(inline_list) > 0:
-                        answer = "Вот какие сотрудники есть в этой компании.\nВыбран: " + str(org_cl[0][5]) + "\norg_id - " + str(org_cl[0][1])
+                        answer = "Вот какие сотрудники есть в этой компании.\nВыбран: " + str(
+                            org_cl[0][5]) + "\norg_id - " + str(org_cl[0][1])
                     else:
                         answer = "Нет сотрудников"
-                    bot.edit_message_text(chat_id=chat_id, message_id=call.message.message_id, text = answer, reply_markup=markup)
+                    bot.edit_message_text(chat_id=chat_id, message_id=call.message.message_id, text=answer,
+                                          reply_markup=markup)
 
             if call.data[:13] == "worker_list4=":
                 worker = db.get_worker2(call.data[13:])
@@ -1050,7 +1115,7 @@ def callback_inline(call):
                     bot.send_message(call.message.chat.id, answ.works1[1], reply_markup=markup)
                     bot.send_message(call.message.chat.id, answ.worksform6[0], reply_markup=markup)
                     db.upd_progress(user_id, "users", "4600")
-                    
+
                     db.upd_org(user_id, "users", "target2", org_cl[0][0])
 
             if call.data[:11] == "5orgs_list=":
@@ -1060,21 +1125,21 @@ def callback_inline(call):
                     inline_list = db.get_works(str(org_cl[0][0]))
                     markup = menu.inline_list(inline_list, "worker_list5")
                     if len(inline_list) > 0:
-                        answer = "Вот какие сотрудники есть в этой компании.\nВыбран: " + str(org_cl[0][5]) + "\norg_id - " + str(org_cl[0][1])
+                        answer = "Вот какие сотрудники есть в этой компании.\nВыбран: " + str(
+                            org_cl[0][5]) + "\norg_id - " + str(org_cl[0][1])
                     else:
                         answer = "Нет сотрудников"
-                    bot.edit_message_text(chat_id=chat_id, message_id=call.message.message_id, text = answer, reply_markup=markup)
-
+                    bot.edit_message_text(chat_id=chat_id, message_id=call.message.message_id, text=answer,
+                                          reply_markup=markup)
 
             if call.data[:13] == "worker_list5=":
                 # worker = db.get_worker2(call.data[13:])
                 db.del_worker(call.data[13:])
                 markup = menu.markup(menu.mainmenu)
                 answer = "Сотрудник удалён из карточки компании"
-                bot.edit_message_text(chat_id=chat_id, message_id=call.message.message_id, text = answer, reply_markup=None)
+                bot.edit_message_text(chat_id=chat_id, message_id=call.message.message_id, text=answer,
+                                      reply_markup=None)
                 bot.send_message(chat_id, "Не забудь уведомить об этом клиента", reply_markup=markup)
-
-
 
             if call.data[:11] == "6orgs_list=":
                 user_cl = db.get_user(call.data[11:], "stop")
@@ -1086,8 +1151,8 @@ def callback_inline(call):
                         answer = "Вот какие сотрудники есть в этой компании.\nВыбран: " + str(org_cl[0][5])
                     else:
                         answer = "Нет сотрудников"
-                    bot.edit_message_text(chat_id=chat_id, message_id=call.message.message_id, text = answer, reply_markup=markup)
-
+                    bot.edit_message_text(chat_id=chat_id, message_id=call.message.message_id, text=answer,
+                                          reply_markup=markup)
 
             if call.data[:11] == "7orgs_list=":
                 user_cl = db.get_user(call.data[11:], "stop")
@@ -1099,21 +1164,21 @@ def callback_inline(call):
                     # markup = menu.inline_list(inline_list, "worker_list6")
 
                     answer = "Отчёт для какого налогового органа ты загружаешь?"
-                    bot.edit_message_text(chat_id=chat_id, message_id=call.message.message_id, text = answer, reply_markup=markup)
-
+                    bot.edit_message_text(chat_id=chat_id, message_id=call.message.message_id, text=answer,
+                                          reply_markup=markup)
 
             if call.data == "nalogi_list6=FNS":
                 answer = "Загружаю отчёт для ФНС:"
-                bot.edit_message_text(chat_id=chat_id, message_id=call.message.message_id, text = answer, reply_markup=None)
+                bot.edit_message_text(chat_id=chat_id, message_id=call.message.message_id, text=answer,
+                                      reply_markup=None)
             if call.data == "nalogi_list6=FSR":
                 answer = "Загружаю отчёт для СФР:"
-                bot.edit_message_text(chat_id=chat_id, message_id=call.message.message_id, text = answer, reply_markup=None)
+                bot.edit_message_text(chat_id=chat_id, message_id=call.message.message_id, text=answer,
+                                      reply_markup=None)
             if call.data == "nalogi_list6=FSS":
                 answer = "Загружаю отчёт для ФСС:"
-                bot.edit_message_text(chat_id=chat_id, message_id=call.message.message_id, text = answer, reply_markup=None)
-                
-
-
+                bot.edit_message_text(chat_id=chat_id, message_id=call.message.message_id, text=answer,
+                                      reply_markup=None)
 
             if call.data[:13] == "worker_list6=":
                 worker = db.get_worker2(call.data[13:])
@@ -1121,37 +1186,41 @@ def callback_inline(call):
                 label = call.message.text.rfind("Выбран")
                 db.upd_org(user_id, "users", "target1", call.data[13:])
                 answer = "Что ты хочешь поменять?\n" + call.message.text[label:] + "\nСотрудник: " + str(worker[0][5])
-                bot.edit_message_text(chat_id=chat_id, message_id=call.message.message_id, text = answer, reply_markup=markup)
+                bot.edit_message_text(chat_id=chat_id, message_id=call.message.message_id, text=answer,
+                                      reply_markup=markup)
 
             if call.data == "assistant_worker_change=okl":
                 markup = menu.markup(menu.cancel)
                 label = call.message.text.rfind("Выбран")
                 answer = "Какой месячный оклад ты хочешь установить для этого сотрудника?\n" + call.message.text[label:]
-                bot.edit_message_text(chat_id=chat_id, message_id=call.message.message_id, text = answer, reply_markup=None)
+                bot.edit_message_text(chat_id=chat_id, message_id=call.message.message_id, text=answer,
+                                      reply_markup=None)
 
-                label = call.message.text.rfind("worker_id")+11
-                
+                label = call.message.text.rfind("worker_id") + 11
+
                 db.upd_progress(user_id, "users", "4001")
 
             if call.data == "assistant_worker_change=dat":
                 markup = menu.markup(menu.cancel2)
                 label = call.message.text.rfind("Выбран")
                 answer = "Какие данные ты хочешь поменять?\n" + call.message.text[label:]
-                bot.edit_message_text(chat_id=chat_id, message_id=call.message.message_id, text = answer, reply_markup=None)
+                bot.edit_message_text(chat_id=chat_id, message_id=call.message.message_id, text=answer,
+                                      reply_markup=None)
                 bot.send_message(call.message.chat.id, answ.worksform6[0], reply_markup=markup)
 
-                label = call.message.text.rfind("worker_id")+11
-                
+                label = call.message.text.rfind("worker_id") + 11
+
                 db.upd_progress(user_id, "users", "4050")
 
             if call.data == "assistant_worker_change=sta":
                 markup = menu.markup(menu.cancel)
                 label = call.message.text.rfind("Выбран")
                 answer = "Какую должность теперь занимает этот сотрудник?\n" + call.message.text[label:]
-                bot.edit_message_text(chat_id=chat_id, message_id=call.message.message_id, text = answer, reply_markup=None)
+                bot.edit_message_text(chat_id=chat_id, message_id=call.message.message_id, text=answer,
+                                      reply_markup=None)
 
-                label = call.message.text.rfind("worker_id")+11
-                
+                label = call.message.text.rfind("worker_id") + 11
+
                 db.upd_progress(user_id, "users", "4003")
 
     except:
@@ -1166,9 +1235,9 @@ def callback_inline(call):
 @bot.message_handler(content_types=['document'])
 def handle_docs_photo(message):
     try:
-            
+
         user_id = str(message.from_user.id)
-        
+
         user = db.get_user(user_id, "stop")
         if user[0][7] != "assistant":
             if user != 'stop' and user[0][8] >= 40 and user[0][8] <= 48:
@@ -1197,7 +1266,7 @@ def handle_docs_photo(message):
                     folder_id = org[0][20]
                 gdrive.drive_upload(src, message.document.file_name, folder_id)
 
-                answer = "Клиент " + org[0][5] + " загрузил на диск " + menu.d_1c[user[0][8]-40]
+                answer = "Клиент " + org[0][5] + " загрузил на диск " + menu.d_1c[user[0][8] - 40]
                 db.upd_progress(user_id, "users", "1")
 
                 bot.send_message(config.assists_chat, answer, reply_markup=None)
@@ -1247,10 +1316,10 @@ def handle_docs_photo(message):
                     user_ids = reply_text[label:]
                     bot.reply_to(message, "Получено")
                     bot.forward_message(user_ids, message.chat.id, message.id)
-                        # user_cl = db.get_user(user_ids, "stop")
-                        # if user_cl != "stop":
-                        #     org_cl = db.get_org(user_id)
-                        #     bot.forward_message(message.chat.id, message.chat.id, message.id)
+                    # user_cl = db.get_user(user_ids, "stop")
+                    # if user_cl != "stop":
+                    #     org_cl = db.get_org(user_id)
+                    #     bot.forward_message(message.chat.id, message.chat.id, message.id)
 
                 elif "Загружаю отчёт для " in reply_text:
                     user = db.get_user(user_id, "stop")
@@ -1270,14 +1339,13 @@ def handle_docs_photo(message):
                         with open(src, 'wb') as new_file:
                             new_file.write(downloaded_file)
                             new_file.close()
-                    
+
                     if "ФНС" in reply_text:
                         folder_id = org[0][24]
                     if "СФР" in reply_text:
                         folder_id = org[0][25]
                     if "ФСС" in reply_text:
                         folder_id = org[0][26]
-                        
 
                     gdrive.drive_upload(src, message.document.file_name, folder_id)
 
@@ -1305,32 +1373,8 @@ def handle_docs_photo(message):
     #     bot.send_message(user_ids, message.text)
 
 
+def generate_token_for_accountant(message: types.Message):
+    pass
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-bot.polling( none_stop = True )
+bot.polling(none_stop=True)

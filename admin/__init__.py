@@ -1,0 +1,1 @@
+from admin.main import generate_key
